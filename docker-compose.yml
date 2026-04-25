@@ -6,7 +6,7 @@ services:
     network_mode: host
     volumes:
       - ./tokens.json:/app/tokens.json
-      - ./logs:/app/logs
+      - /volume1/docker/claude-fitbit/logs:/app/logs
     logging:
       driver: "json-file"
       options:

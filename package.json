@@ -8,7 +8,7 @@
     "start": "node src/index.js",
     "serve": "node src/serve.js",
     "authorize": "node src/authorize.js",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.9.0",

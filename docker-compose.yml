@@ -1,0 +1,13 @@
+services:
+  claude-fitbit:
+    image: ghcr.io/aldarondo/claude-fitbit:latest
+    restart: unless-stopped
+    env_file: .env
+    network_mode: host
+    volumes:
+      - ./tokens.json:/app/tokens.json
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"

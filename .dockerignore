@@ -1,0 +1,8 @@
+node_modules/
+.env
+tokens.json
+tests/
+.github/
+*.md
+.gitignore
+.dockerignore

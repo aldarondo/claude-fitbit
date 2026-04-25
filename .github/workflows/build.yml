@@ -1,0 +1,70 @@
+name: Build claude-fitbit image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - src/**
+      - package*.json
+  schedule:
+    - cron: "0 9 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/claude-fitbit:latest
+            ghcr.io/${{ github.repository_owner }}/claude-fitbit:${{ github.sha }}
+
+      - name: Install cloudflared and sshpass
+        run: |
+          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o /tmp/cloudflared.deb
+          sudo dpkg -i /tmp/cloudflared.deb && sudo apt-get install -y sshpass
+
+      - name: Deploy to NAS
+        env:
+          NAS_PASS: ${{ secrets.NAS_SSH_PASSWORD }}
+          SSHPASS: ${{ secrets.NAS_SSH_PASSWORD }}
+          CF_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          FITBIT_CLIENT_ID: ${{ secrets.FITBIT_CLIENT_ID }}
+          FITBIT_CLIENT_SECRET: ${{ secrets.FITBIT_CLIENT_SECRET }}
+          FITBIT_DEFAULT_USER: ${{ secrets.FITBIT_DEFAULT_USER }}
+          BRIAN_MEM_URL: ${{ secrets.BRIAN_MEM_URL }}
+          BRIAN_MEM_USER: ${{ secrets.BRIAN_MEM_USER }}
+          BRIAN_MEM_PASS: ${{ secrets.BRIAN_MEM_PASS }}
+        run: |
+          SSH_CMD="sshpass -e ssh -o StrictHostKeyChecking=no \
+            -o 'ProxyCommand=cloudflared access ssh --hostname nas-ssh.aldarondo.family --id $CF_CLIENT_ID --secret $CF_CLIENT_SECRET' \
+            charles@nas-ssh.aldarondo.family"
+
+          printf 'FITBIT_CLIENT_ID=%s\nFITBIT_CLIENT_SECRET=%s\nFITBIT_DEFAULT_USER=%s\nPORT=8770\nSERVER_HOST=0.0.0.0\nBRIAN_MEM_URL=%s\nBRIAN_MEM_USER=%s\nBRIAN_MEM_PASS=%s\n' \
+            "$FITBIT_CLIENT_ID" "$FITBIT_CLIENT_SECRET" "$FITBIT_DEFAULT_USER" \
+            "$BRIAN_MEM_URL" "$BRIAN_MEM_USER" "$BRIAN_MEM_PASS" \
+            | eval $SSH_CMD "cat > /volume1/docker/claude-fitbit/.env"
+
+          eval $SSH_CMD \
+            "echo \"$NAS_PASS\" | sudo -S /usr/local/bin/docker compose -f /volume1/docker/claude-fitbit/docker-compose.yml pull && \
+             echo \"$NAS_PASS\" | sudo -S /usr/local/bin/docker compose -f /volume1/docker/claude-fitbit/docker-compose.yml up -d"
